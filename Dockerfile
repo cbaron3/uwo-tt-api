@@ -1,4 +1,5 @@
-FROM golang:1.12-alpine AS build_base
+#FROM golang:1.12-alpine AS build_base
+FROM golang
 
 RUN apk add --no-cache git
 
@@ -8,7 +9,6 @@ WORKDIR /tmp/uwo-tt-api
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
 COPY go.sum .
-COPY .env .
 
 RUN go mod download
 
@@ -30,4 +30,5 @@ COPY --from=build_base /tmp/uwo-tt-api/out/uwo-tt-api /app/uwo-tt-api
 EXPOSE 8080
 
 # Run the binary program produced by `go install`
+COPY ./.env /
 CMD ["/app/uwo-tt-api"]
