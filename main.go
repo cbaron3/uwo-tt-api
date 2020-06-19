@@ -11,14 +11,16 @@ func main()  {
 	err := viper.ReadInConfig()
 
 	if err != nil {
-		log.Fatalf("Error reading config file %s", err)
+		log.Printf("Error reading config file %s. Using environment variables instead.", err)
+		viper.AutomaticEnv()
 	}
-
+	
 	value, ok := viper.Get("TEST_KEY").(string)
 
 	if !ok {
-		log.Fatalf("Invalid type assertion")
+		log.Fatalf("Key does not exist or has invalid type")
 	}
 
 	fmt.Println("KEY: ", value)
+	fmt.Println("Docker test")
 }
