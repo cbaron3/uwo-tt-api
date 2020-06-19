@@ -1,6 +1,7 @@
-FROM golang
+#FROM golang:1.12-alpine AS build_base
+FROM golang AS build_base
 
-# RUN apk add --no-cache git
+#RUN apk add --no-cache git
 
 # Set the Current Working Directory inside the container
 WORKDIR /tmp/uwo-tt-api
