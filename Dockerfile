@@ -30,5 +30,5 @@ RUN go build -o ./out/uwo-tt-api .
 EXPOSE 8080
 
 # Run the binary program produced by `go install`
-#COPY ./.env /
+COPY ./.env /
 CMD ["/tmp/uwo-tt-api/out/uwo-tt-api"]
