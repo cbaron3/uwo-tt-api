@@ -12,6 +12,9 @@ import (
 	"github.com/go-co-op/gocron"
 
 	"net/http"
+
+	"github.com/swaggo/http-swagger"
+	_ "github.com/swaggo/http-swagger/example/gorilla/docs"
 )
 
 func task() {
@@ -151,6 +154,20 @@ func courseHandler(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: Courses")
 }
 
+// @title Swagger Example API
+// @version 1.0
+// @description This is a sample server Petstore server.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host petstore.swagger.io
+// @BasePath /v2
 func main()  {
 	viper.SetConfigFile(".env")
 	err := viper.ReadInConfig()
@@ -182,6 +199,8 @@ func main()  {
 
 	myRouter.HandleFunc("/", home)
 	
+	myRouter.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
+	
 	myRouter.HandleFunc("/subjects", subjectHandler)
 	myRouter.HandleFunc("/suffixes", suffixHandler)
 	myRouter.HandleFunc("/delivery_types", deliveryHandler)
@@ -193,6 +212,4 @@ func main()  {
 	myRouter.HandleFunc("/courses", courseHandler)
 
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
-	
-
 }
