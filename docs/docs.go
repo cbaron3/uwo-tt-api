@@ -32,7 +32,49 @@ var doc = `{
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
-    "paths": {}
+    "paths": {
+        "/subjects": {
+            "get": {
+                "description": "Get all string pairs as a list",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subject"
+                ],
+                "summary": "Get course subjects",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.Subject"
+                        }
+                    },
+                    "400": {
+                        "description": "Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.Subject": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "ACTURSCI"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Actuarial Sciences"
+                }
+            }
+        }
+    }
 }`
 
 type swaggerInfo struct {
@@ -47,10 +89,10 @@ type swaggerInfo struct {
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = swaggerInfo{
 	Version:     "1.0",
-	Host:        "petstore.swagger.io",
-	BasePath:    "/v2",
+	Host:        "",
+	BasePath:    "",
 	Schemes:     []string{},
-	Title:       "Swagger Example API",
+	Title:       "My Example API",
 	Description: "This is a sample server Petstore server.",
 }
 

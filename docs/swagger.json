@@ -2,7 +2,7 @@
     "swagger": "2.0",
     "info": {
         "description": "This is a sample server Petstore server.",
-        "title": "Swagger Example API",
+        "title": "My Example API",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
             "name": "API Support",
@@ -15,7 +15,47 @@
         },
         "version": "1.0"
     },
-    "host": "petstore.swagger.io",
-    "basePath": "/v2",
-    "paths": {}
+    "paths": {
+        "/subjects": {
+            "get": {
+                "description": "Get all string pairs as a list",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subject"
+                ],
+                "summary": "Get course subjects",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.Subject"
+                        }
+                    },
+                    "400": {
+                        "description": "Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.Subject": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "ACTURSCI"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Actuarial Sciences"
+                }
+            }
+        }
+    }
 }
