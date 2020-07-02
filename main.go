@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	_ "fmt"
 	"log"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/moesif/moesifmiddleware-go"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/go-co-op/gocron"
 
@@ -88,23 +91,6 @@ func loadConfig() {
 func main() {
 	loadConfig()
 
-	// Start a scheduler with worker task
-	s1 := gocron.NewScheduler(time.UTC)
-	s1.Every(5).Seconds().StartImmediately().Do(worker.Task)
-	s1.StartAsync()
-
-	// Endpoint router
-	router := gin.Default()
-
-	// Define controller instance for endpoints
-	c := controller.NewController()
-
-	// Get moesif configuration
-	moesifOptions := getMoesifOptions()
-
-	// Swagger documentation
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
 	// Mongo URL
 	mode, modeOK := viper.Get("GIN_MODE").(string)
 	localDB, localOK := viper.Get("LOCAL_MONGODB").(string)
@@ -127,9 +113,47 @@ func main() {
 			dbURL = localDB
 		} else {
 			log.Printf("Local database url not found, using localhost")
-			dbURL = "mongodb://localhost:27017"
+			dbURL = "mongodb://mongodb:27017"
 		}
 	}
+
+	// Set client options
+	clientOptions := options.Client().ApplyURI(dbURL)
+
+	// Connect to MongoDB
+	client, err := mongo.Connect(context.TODO(), clientOptions)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Check the connection
+	err = client.Ping(context.TODO(), nil)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Connected to MongoDB!")
+
+	db := client.Database("uwo-tt-api")
+
+	// Start a scheduler with worker task
+	s1 := gocron.NewScheduler(time.UTC)
+	s1.Every(1).Day().StartImmediately().Do(worker.ScrapeTimeTable, db)
+	s1.StartAsync()
+
+	// Endpoint router
+	router := gin.Default()
+
+	// Define controller instance for endpoints
+	c := controller.NewController()
+
+	// Get moesif configuration
+	moesifOptions := getMoesifOptions()
+
+	// Swagger documentation
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// API group
 	api := router.Group("/api/v1")
@@ -148,6 +172,6 @@ func main() {
 	}
 
 	port := getPort()
-	fmt.Println(port)
+	fmt.Printf("Running on %s", port)
 	router.Run(port)
 }
