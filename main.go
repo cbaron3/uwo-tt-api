@@ -74,20 +74,15 @@ func loadConfig() {
 	viper.AutomaticEnv()
 }
 
-// @title Swagger Example API
+// @title Western University Time Table API
 // @version 1.0
-// @description This is a sample server celler server.
-// @termsOfService http://swagger.io/terms/
+// @description This is an API based on Western University's most update time table for undergraduate courses. Search options and course data is scraped from https://studentservices.uwo.ca/secure/timetables/mastertt/ttindex.cfm and stored in a database to avoid overloading the website with scrape requests. Data is scraped daily to ensure data is up-to-date.
 
 // @contact.name API Support
-// @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
-
-// @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @contact.url http://www.github.com/cbaron3/uwo-tt-api
 
 // @host localhost:8080
-// @BasePath /api/v1
+// @BasePath /api/v1/
 func main() {
 	loadConfig()
 
@@ -117,11 +112,14 @@ func main() {
 		}
 	}
 
-	// Set client options
-	clientOptions := options.Client().ApplyURI(dbURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	// Connect to MongoDB
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(dbURL))
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if err != nil {
 		log.Fatal(err)
@@ -148,12 +146,18 @@ func main() {
 
 	// Define controller instance for endpoints
 	c := controller.NewController()
+	c.DB = db
 
 	// Get moesif configuration
 	moesifOptions := getMoesifOptions()
 
 	// Swagger documentation
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.NoRoute(func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/docs/index.html")
+		c.Abort()
+	})
+
+	router.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// API group
 	api := router.Group("/api/v1")
