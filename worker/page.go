@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 	"uwo-tt-api/model"
 
@@ -13,14 +14,16 @@ import (
 )
 
 // Page defines the website source
-type Page struct {
+type PageScraper struct {
 	Header string
 	URL    string
 	Status string
+	DB     *mongo.Database
+	Form   *goquery.Selection
 }
 
 // BuildSourceInfo creates source info based on page information
-func (page *Page) BuildSourceInfo() model.SourceInfo {
+func (page *PageScraper) BuildSourceInfo() model.SourceInfo {
 	sourceInfo := model.SourceInfo{
 		Title: page.Header[0 : len(page.Header)-9], // Everything besides last 9 chars defines the Title
 		Year:  page.Header[len(page.Header)-9:],    // Last 9 chars define the Year
@@ -31,7 +34,7 @@ func (page *Page) BuildSourceInfo() model.SourceInfo {
 }
 
 // BuildTimeInfo creates time info based on current time
-func (page *Page) BuildTimeInfo() model.TimeInfo {
+func (page *PageScraper) BuildTimeInfo() model.TimeInfo {
 	timeInfo := model.TimeInfo{
 		Added: time.Now(),
 	}
@@ -40,7 +43,7 @@ func (page *Page) BuildTimeInfo() model.TimeInfo {
 }
 
 // FetchDocument fetches contents of page based on URL
-func (page *Page) FetchDocument() (document *goquery.Document, err error) {
+func (page *PageScraper) FetchDocument() (document *goquery.Document, err error) {
 	// GET request for website contents
 	resp, err := http.Get(page.URL)
 	if err != nil {
@@ -64,8 +67,53 @@ func (page *Page) FetchDocument() (document *goquery.Document, err error) {
 	return doc, nil
 }
 
+func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	// Connect to collection
+	collection := page.DB.Collection(collectionName)
+
+	// Scraped options, empty map slice
+	opts := []interface{}{}
+
+	// Find all instances of selector and append it to result
+	page.Form.Find(selector + " option").Each(func(i int, elem *goquery.Selection) {
+		text := elem.Text()
+		value, _ := elem.Attr("value")
+
+		opts = append(opts, model.Option{
+			Source: page.BuildSourceInfo(),
+			Time:   page.BuildTimeInfo(),
+			Data: model.OptionData{
+				Value: Trim(value),
+				Text:  Trim(text),
+			},
+		})
+	})
+
+	// Delete all, keep collection as up to date as possible
+	deleteCtx, err := collection.DeleteMany(context.TODO(), bson.M{})
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// Insert new options
+	insertCtx, err := collection.InsertMany(context.TODO(), opts)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Printf("%s Deleted: %d, %s Inserted: %d\n",
+		collectionName,
+		deleteCtx.DeletedCount,
+		collectionName,
+		len(insertCtx.InsertedIDs))
+}
+
 // PostDocument fetches content from page URL after submitting post request with form data
-func (page *Page) PostDocument(data map[string][]string) (document *goquery.Document, err error) {
+func (page *PageScraper) PostDocument(data map[string][]string) (document *goquery.Document, err error) {
 	// POST request for website contents
 	resp, err := http.PostForm(page.URL, data)
 	if err != nil {
@@ -87,7 +135,7 @@ func (page *Page) PostDocument(data map[string][]string) (document *goquery.Docu
 }
 
 // AddCoursesToDB stores course information that was sourced from the page in mongodb
-func (page *Page) AddCoursesToDB(collection *mongo.Collection, courses []model.CourseData) {
+func (page *PageScraper) AddCoursesToDB(collection *mongo.Collection, courses []model.CourseData) {
 	if len(courses) <= 0 {
 		fmt.Println("Insufficient course data")
 		return
@@ -123,7 +171,7 @@ func (page *Page) AddCoursesToDB(collection *mongo.Collection, courses []model.C
 }
 
 // AddOptionsToDB stores option information that was sourced from the page in mongodb
-func (page *Page) AddOptionsToDB(db *mongo.Database, collectionName string, options []model.OptionData) {
+func (page *PageScraper) AddOptionsToDB(db *mongo.Database, collectionName string, options []model.OptionData) {
 	// Connect to collection for specific option type
 	collection := db.Collection(collectionName)
 
