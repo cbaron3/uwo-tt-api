@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 	"uwo-tt-api/model"
@@ -12,6 +13,42 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+// NumberCol section number column index
+const NumberCol = 0
+
+// ComponentCol course component column index
+const ComponentCol = 1
+
+// ClassNbrCol section class number column index
+const ClassNbrCol = 2
+
+// DaysCol section scheduled days column index
+const DaysCol = 3
+
+// StartTimeCol section start time column index
+const StartTimeCol = 4
+
+// EndTimeCol section end time column index
+const EndTimeCol = 5
+
+// LocationCol section location column index
+const LocationCol = 6
+
+// InstructorCol section instructor column index
+const InstructorCol = 7
+
+// RequisitesCol section prerequisities column index
+const RequisitesCol = 8
+
+// StatusCol section status column index
+const StatusCol = 9
+
+// CampusCol section campus column index
+const CampusCol = 10
+
+// DeliveryCol section delivery type column index
+const DeliveryCol = 11
 
 // Page defines the website source
 type PageScraper struct {
@@ -67,51 +104,6 @@ func (page *PageScraper) FetchDocument() (document *goquery.Document, err error)
 	return doc, nil
 }
 
-func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	// Connect to collection
-	collection := page.DB.Collection(collectionName)
-
-	// Scraped options, empty map slice
-	opts := []interface{}{}
-
-	// Find all instances of selector and append it to result
-	page.Form.Find(selector + " option").Each(func(i int, elem *goquery.Selection) {
-		text := elem.Text()
-		value, _ := elem.Attr("value")
-
-		opts = append(opts, model.Option{
-			Source: page.BuildSourceInfo(),
-			Time:   page.BuildTimeInfo(),
-			Data: model.OptionData{
-				Value: Trim(value),
-				Text:  Trim(text),
-			},
-		})
-	})
-
-	// Delete all, keep collection as up to date as possible
-	deleteCtx, err := collection.DeleteMany(context.TODO(), bson.M{})
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// Insert new options
-	insertCtx, err := collection.InsertMany(context.TODO(), opts)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Printf("%s Deleted: %d, %s Inserted: %d\n",
-		collectionName,
-		deleteCtx.DeletedCount,
-		collectionName,
-		len(insertCtx.InsertedIDs))
-}
-
 // PostDocument fetches content from page URL after submitting post request with form data
 func (page *PageScraper) PostDocument(data map[string][]string) (document *goquery.Document, err error) {
 	// POST request for website contents
@@ -134,76 +126,217 @@ func (page *PageScraper) PostDocument(data map[string][]string) (document *goque
 	return doc, nil
 }
 
-// AddCoursesToDB stores course information that was sourced from the page in mongodb
-func (page *PageScraper) AddCoursesToDB(collection *mongo.Collection, courses []model.CourseData) {
-	if len(courses) <= 0 {
-		fmt.Println("Insufficient course data")
-		return
-	}
+// ScrapeOptToDB temp
+func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, wg *sync.WaitGroup) {
+	defer wg.Done()
 
-	newCourses := []interface{}{}
+	// Connect to collection
+	tempCollection := page.DB.Collection(collectionName + "_temp")
 
-	// Convert list of course data into type compatible with mongo insertions (list of empty interface)
-	// Add extra metadata to data as well
-	for _, course := range courses {
-		newCourses = append(newCourses, model.Course{
+	// Scraped options, empty map slice
+	opts := []interface{}{}
+
+	// Find all instances of selector and append it to result
+	page.Form.Find(selector + " option").Each(func(i int, elem *goquery.Selection) {
+		text := elem.Text()
+		value, _ := elem.Attr("value")
+
+		opts = append(opts, model.Option{
 			Source: page.BuildSourceInfo(),
 			Time:   page.BuildTimeInfo(),
-			Data:   course,
+			Data: model.OptionData{
+				Value: Trim(value),
+				Text:  Trim(text),
+			},
 		})
-	}
+	})
 
-	// Delete all other courses of the same faculty first to ensure course data is up to date
-	deleteCtx, err := collection.DeleteMany(context.TODO(), bson.M{"data.faculty": courses[0].Faculty})
-
+	// Insert data into a new temporary collection to not affect main collection during scraping
+	insertCtx, err := tempCollection.InsertMany(context.TODO(), opts)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	// Insert new courses
-	insertCtx, err := collection.InsertMany(context.TODO(), newCourses)
+	// Create aggregation pipeline where first, all data is matched, then all data is written to collectionName
+	pipeline := bson.A{
+		bson.M{"$match": bson.M{}},
+		bson.M{"$out": collectionName},
+	}
 
+	// Use aggregation to make sure main collection is never empty
+	startTime := time.Now()
+	tempCollection.Aggregate(context.TODO(), pipeline)
+
+	fmt.Printf("%s Inserted: %d. Aggregation time: %s\n",
+		collectionName,
+		len(insertCtx.InsertedIDs),
+		time.Since(startTime).String())
+
+	// Drop temporary collection
+	err = tempCollection.Drop(context.TODO())
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Printf("Courses Deleted: %d, Courses Inserted: %d\n", deleteCtx.DeletedCount, len(insertCtx.InsertedIDs))
 }
 
-// AddOptionsToDB stores option information that was sourced from the page in mongodb
-func (page *PageScraper) AddOptionsToDB(db *mongo.Database, collectionName string, options []model.OptionData) {
-	// Connect to collection for specific option type
-	collection := db.Collection(collectionName)
+func extractCourseInfo(courseList *goquery.Selection, courseIndex int) model.CourseComponent {
+	// Grab header based on course index
+	header := courseList.ChildrenFiltered("h4").Eq(courseIndex).Text()
 
-	newOptions := []interface{}{}
+	// Grab description based on course index
+	desc := courseList.ChildrenFiltered("p").Eq(courseIndex).Text()
 
-	// Convert list of option data into type compatible with mongo insertions (list of empty interface)
-	// Add extra metadata to data as well
-	for _, option := range options {
-		newOptions = append(newOptions, model.Option{
-			Source: page.BuildSourceInfo(),
-			Time:   page.BuildTimeInfo(),
-			Data:   option,
+	// Course name
+	name := strings.Split(header, "-")[1]
+
+	// Course faculty
+	faculty := strings.Split(strings.Split(header, "-")[0], " ")[0]
+
+	// Course number and suffix
+	// 1000A -> "1000" "A"
+	// 1000 -> "1000" ""
+	suffix := ""
+	number := strings.Split(strings.Split(header, "-")[0], " ")[1]
+	if len(number) == 5 {
+		suffix = string(number[4])
+		number = number[:4]
+	}
+
+	return model.CourseComponent{
+		Faculty:     Trim(faculty),
+		Number:      Trim(number),
+		Suffix:      Trim(suffix),
+		Name:        Trim(name),
+		Description: Trim(desc)}
+}
+
+func extractSectionInfo(section *goquery.Selection) model.SectionComponent {
+	var s model.SectionComponent
+
+	// Filter section into each individual section column component
+	var start string
+	var end string
+	var days []string
+
+	section.ChildrenFiltered("td").Each(func(k int, elem *goquery.Selection) {
+
+		// k represents index of the table heading; column number
+		switch k {
+		case NumberCol:
+			s.Number = Trim(elem.Text())
+		case ComponentCol:
+			s.Component = Trim(elem.Text())
+		case ClassNbrCol:
+			s.ClassNumber = Trim(elem.Text())
+		case DaysCol:
+			// Find all valid table elements that represent days the class is scheduled for
+			elem.Find("td").Each(func(d int, day *goquery.Selection) {
+				if day.Text() != "&nbsp;" {
+					days = append(days, Trim(day.Text()))
+				}
+			})
+			// s.Days = Trim(s.Days)
+		case StartTimeCol:
+			start = Trim(elem.Text())
+		case EndTimeCol:
+			end = Trim(elem.Text())
+		case LocationCol:
+			s.Location = Trim(elem.Text())
+		case InstructorCol:
+			s.Instructor = Trim(elem.Text())
+		case RequisitesCol:
+			s.Reqs = Trim(elem.Text())
+		case StatusCol:
+			s.Status = Trim(elem.Text())
+		case CampusCol:
+			s.Campus = Trim(elem.Text())
+		case DeliveryCol:
+			s.Delivery = Trim(elem.Text())
+		}
+	})
+
+	// Collect days and times
+	for _, day := range days {
+		if day != "" {
+			s.Times = append(s.Times, model.TimeComponent{day, start, end})
+		}
+	}
+
+	return s
+}
+
+// ScrapeCoursesToDB tbd
+func (page *PageScraper) ScrapeCoursesToDB(c chan *goquery.Document) {
+
+	tempCollection := page.DB.Collection("courses_temp")
+
+	for doc := range c {
+		courses := doc.Find(".span12")
+
+		fmt.Println("New Doc")
+
+		// Filter course list into each individual course table
+		courses.ChildrenFiltered("table").Each(func(i int, course *goquery.Selection) {
+
+			// Course info and section info are not grouped into a div so need to match table to header/p with index
+			courseData := extractCourseInfo(courses, i)
+
+			// Filter course into each individual course section
+			course.ChildrenFiltered("tbody").ChildrenFiltered("tr").Each(func(_ int, section *goquery.Selection) {
+
+				sectionData := extractSectionInfo(section)
+
+				courseSection := model.Section{
+					Source:      page.BuildSourceInfo(),
+					Time:        page.BuildTimeInfo(),
+					CourseData:  courseData,
+					SectionData: sectionData,
+				}
+
+				// Update all components with the section information and component by adding new time information
+				query := bson.M{"$and": bson.A{
+					bson.M{"courseData": courseData},
+					bson.M{"sectionData.number": sectionData.Number},
+					bson.M{"sectionData.component": sectionData.Component}}}
+
+				changes := bson.M{"$push": bson.M{"sectionData.times": bson.M{"$each": sectionData.Times}}}
+
+				// Update
+				updateResult, err := tempCollection.UpdateMany(context.TODO(), query, changes)
+				if err != nil {
+					if len(sectionData.Times) != 0 {
+						fmt.Println(err)
+					}
+				}
+
+				// If no modifications were made, insert the document
+				if updateResult.ModifiedCount == 0 {
+					_, insertErr := tempCollection.InsertOne(context.TODO(), courseSection)
+					if insertErr != nil {
+						fmt.Println(insertErr)
+					}
+				}
+			})
 		})
 	}
 
-	// Delete all, keep collection as up to date as possible
-	deleteCtx, err := collection.DeleteMany(context.TODO(), bson.M{})
+	// TODO: Refractor out because used twice
+	// Create aggregation pipeline where first, all data is matched, then all data is written to collectionName
+	pipeline := bson.A{
+		bson.M{"$match": bson.M{}},
+		bson.M{"$out": "courses"},
+	}
 
+	// Use aggregation to make sure main collection is never empty
+	startTime := time.Now()
+	tempCollection.Aggregate(context.TODO(), pipeline)
+
+	fmt.Printf("Course aggregation time: %s\n", time.Since(startTime).String())
+
+	// Drop temporary collection
+	err := tempCollection.Drop(context.TODO())
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	// Insert new options
-	insertCtx, err := collection.InsertMany(context.TODO(), newOptions)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Printf("%s Deleted: %d, %s Inserted: %d\n",
-		collectionName,
-		deleteCtx.DeletedCount,
-		collectionName,
-		len(insertCtx.InsertedIDs))
 }
