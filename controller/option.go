@@ -10,6 +10,10 @@ import (
 	_ "uwo-tt-api/model" // Placeholder; will be required soon
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/gorilla/schema"
+	
 )
 
 // ListSubjects godoc
@@ -300,6 +304,14 @@ func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(options)
 }
 
+
+type Filter struct {
+    Offset int64  `schema:"offset"`
+    Limit  int64  `schema:"limit"`
+    SortBy string `schema:"sortby"`
+    Asc    bool   `schema:"asc"`
+}
+
 // ListCampuses godoc
 // @Summary List all possible campuses for courses
 // @Description Get list of possible campuses where each campus is a string pair representing form text and form value.
@@ -314,8 +326,27 @@ func (c *Controller) ListCampuses(w http.ResponseWriter, r *http.Request) {
 	hitEndpoint("Campuses")
 
 	collection := c.DB.Collection("campuses")
+	
+	if err := r.ParseForm(); err != nil {
+        // Handle error
+    }
 
-	cur, err := collection.Find(context.TODO(), bson.D{})
+	findOptions := options.Find() // build a `findOptions`
+	filter := new(Filter)
+	
+    if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
+        // Handle error
+	} else {
+		page_num := int64(filter.Page)
+		page_size := int64(filter.Limit)
+		skips := page_size * (page_num - 1)
+
+		findOptions.SetSkip(skips) // skip whatever you want, like `offset` clause in mysql
+		findOptions.SetLimit(page_size) // like `limit` clause in mysql
+		findOptions.SetSort(bson.D{{filter.SortBy, 1}})
+	}
+	
+	cur, err := collection.Find(context.TODO(), bson.D{}, findOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
