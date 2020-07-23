@@ -13,8 +13,193 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/gorilla/schema"
+
+	"strings"
+	"errors"
 	
 )
+
+type OptQueryParams struct {
+	// Filtering
+	Inclusive bool `schema:"inclusive"`  
+	Value []string `schema:"value"`
+	Text []string `schema:"text"`
+
+	// Sorting
+	SortBy string `schema:"sortby"`
+	Dec    bool   `schema:"dec"`
+
+	// Pagination 
+    Offset int  `schema:"offset"`
+    Limit  int  `schema:"limit"`
+
+}
+
+func ExtractOptFilter(r *http.Request) (bson.M, error) {
+
+	cmds := map[string]string{
+		"exact": "$eq",
+		"gt":   "$gt",
+		"gte": "$gte",
+		"lt": "$lt",
+		"lte": "$lte",
+	}
+
+
+	filter := new(OptQueryParams)
+	
+	result := bson.M{}
+	arrfilter := bson.A{}
+
+    if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
+		fmt.Println("Opt decoding failed")
+	} else {
+		
+
+		for _, value := range filter.Value {
+			f := strings.Split(value, ":")
+
+			if val, ok := cmds[f[0]]; ok {
+				arrfilter = append(arrfilter, bson.M{"data.value" : bson.M{val: f[1]}})
+			} else {
+				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
+			}
+		}
+
+		for _, text := range filter.Text {
+			f := strings.Split(text, ":")
+
+			if val, ok := cmds[f[0]]; ok {
+				arrfilter = append(arrfilter, bson.M{"data.text" : bson.M{val: f[1]}})
+			} else {
+				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
+			}
+		}
+
+		if len(arrfilter) > 0 {
+			if filter.Inclusive == true {
+				result = bson.M{"$or": arrfilter}
+			} else {
+				result = bson.M{"$and": arrfilter}
+			}
+		}
+		
+	}
+
+	return result, nil
+}
+
+
+// No need for filtering with options
+func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
+
+	opts := options.Find() 
+	filter := new(OptQueryParams)
+	
+    if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
+		return opts, errors.New("Option decoding failed")
+	} else {
+		fmt.Println(filter)
+
+		// Determine sort parameters if they exist
+		if filter.SortBy != "" {
+			// By default, sort ascending unless descending is specfied
+			if filter.Dec == true {
+				opts.SetSort(bson.D{{"data."+filter.SortBy, -1}})
+			} else {
+				opts.SetSort(bson.D{{"data."+filter.SortBy, 1}})
+			}
+		}
+
+		// Determine pagination parameters if they exist
+		if filter.Limit != 0 {
+			opts.SetLimit(int64(filter.Limit))
+
+			// Can only create a skip in records if the limit is known
+			if filter.Offset != 0 {
+				opts.SetSkip(int64(filter.Limit * (filter.Offset - 1)))
+			}
+		}
+	}
+
+	return opts, nil
+}
+
+func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	hitEndpoint(collectionName)
+
+	collection := c.DB.Collection(collectionName)
+
+	// Check if url can be parsed
+	if err := r.ParseForm(); err != nil {
+		fmt.Println("Form failed to parse")
+		// Handle error
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	// Extract find filters
+	findFilter, err := ExtractOptFilter(r)
+	if err != nil {
+		fmt.Println("Filters failed to extract")
+		// Handle error
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	findOptions, err := ExtractOptParams(r)
+	if err != nil {
+		fmt.Println("Options failed to extract")
+		// Handle error
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	cur, err := collection.Find(context.TODO(), findFilter, findOptions)
+	if err != nil {
+		fmt.Println("DB query failed; malformed filter or option")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	//Define an array in which you can store the decoded documents
+	var options []model.Option
+
+	for cur.Next(context.TODO()) {
+		//Create a value into which the single document can be decoded
+		var elem model.Option
+		err := cur.Decode(&elem)
+		if err != nil {
+			fmt.Println("Failed to decode")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(err.Error())
+			return
+		}
+
+		options = append(options, elem)
+	}
+
+	if err := cur.Err(); err != nil {
+		fmt.Println("Failed to iterate through collection")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	//Close the cursor once finished
+	cur.Close(context.TODO())
+
+	fmt.Printf("Found %d documents in %s", len(options), collectionName)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(options)
+}
 
 // ListSubjects godoc
 // @Summary List all course subjects
@@ -27,41 +212,7 @@ import (
 // @Failure 500 {object} httputil.HTTPError
 // @Router /subjects [get]
 func (c *Controller) ListSubjects(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("Subjects")
-
-	collection := c.DB.Collection("subjects")
-
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in subjects", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
+	c.optionsEndpoint("subjects", w, r)
 }
 
 // ListSuffixes godoc
@@ -75,41 +226,7 @@ func (c *Controller) ListSubjects(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.HTTPError
 // @Router /suffixes [get]
 func (c *Controller) ListSuffixes(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("Suffixes")
-
-	collection := c.DB.Collection("suffixes")
-
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in suffixes", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
+	c.optionsEndpoint("suffixes", w, r)
 }
 
 // ListDeliveryTypes godoc
@@ -123,41 +240,7 @@ func (c *Controller) ListSuffixes(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.HTTPError
 // @Router /delivery_types [get]
 func (c *Controller) ListDeliveryTypes(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("Delivery Types")
-
-	collection := c.DB.Collection("delivery_types")
-
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in delivery types", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
+	c.optionsEndpoint("delivery_types", w, r)
 }
 
 // ListComponents godoc
@@ -171,41 +254,7 @@ func (c *Controller) ListDeliveryTypes(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.HTTPError
 // @Router /components [get]
 func (c *Controller) ListComponents(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("Components")
-
-	collection := c.DB.Collection("components")
-
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in components", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
+	c.optionsEndpoint("components", w, r)
 }
 
 // ListStartTimes godoc
@@ -219,41 +268,7 @@ func (c *Controller) ListComponents(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.HTTPError
 // @Router /start_times [get]
 func (c *Controller) ListStartTimes(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("Start Times")
-
-	collection := c.DB.Collection("start_times")
-
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in start times", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
+	c.optionsEndpoint("start_times", w, r)
 }
 
 // ListEndTimes godoc
@@ -267,49 +282,7 @@ func (c *Controller) ListStartTimes(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.HTTPError
 // @Router /end_times [get]
 func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("End Times")
-
-	collection := c.DB.Collection("end_times")
-
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in end times", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
-}
-
-
-type Filter struct {
-    Offset int64  `schema:"offset"`
-    Limit  int64  `schema:"limit"`
-    SortBy string `schema:"sortby"`
-    Asc    bool   `schema:"asc"`
+	c.optionsEndpoint("end_times", w, r)
 }
 
 // ListCampuses godoc
@@ -323,60 +296,7 @@ type Filter struct {
 // @Failure 500 {object} httputil.HTTPError
 // @Router /campuses [get]
 func (c *Controller) ListCampuses(w http.ResponseWriter, r *http.Request) {
-	hitEndpoint("Campuses")
-
-	collection := c.DB.Collection("campuses")
-	
-	if err := r.ParseForm(); err != nil {
-        // Handle error
-    }
-
-	findOptions := options.Find() // build a `findOptions`
-	filter := new(Filter)
-	
-    if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-        // Handle error
-	} else {
-		page_num := int64(filter.Page)
-		page_size := int64(filter.Limit)
-		skips := page_size * (page_num - 1)
-
-		findOptions.SetSkip(skips) // skip whatever you want, like `offset` clause in mysql
-		findOptions.SetLimit(page_size) // like `limit` clause in mysql
-		findOptions.SetSort(bson.D{{filter.SortBy, 1}})
-	}
-	
-	cur, err := collection.Find(context.TODO(), bson.D{}, findOptions)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var options []model.Option
-
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		options = append(options, elem)
-	}
-
-	if err := cur.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	//Close the cursor once finished
-	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in campuses", len(options))
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(options)
+	c.optionsEndpoint("campuses", w, r)
 }
 
 // Course number and days are a given; simply provided usage description in documentation

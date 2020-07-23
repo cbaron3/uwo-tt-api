@@ -20,6 +20,15 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 
+func (c* Controller) ListSections(w http.ResponseWriter, r *http.Request) {
+	// Leaves sections as is
+}
+
+
+func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
+	// Combines sections
+}
+
 // ListCourses godoc
 // @Summary List courses
 // @Description List all courses and the sections in each course that match query filters
@@ -32,7 +41,7 @@ func stringInSlice(a string, list []string) bool {
 // @Failure 404 {object} httputil.HTTPError
 // @Failure 500 {object} httputil.HTTPError
 // @Router /courses [get]
-func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
+//func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 	// hitEndpoint("Courses")
 
 	// fmt.Println("GET params were:", r.URL.Query())
@@ -166,7 +175,7 @@ func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Content-Type", "application/json")
 	// w.WriteHeader(http.StatusOK)
 	// json.NewEncoder(w).Encode(courses)
-}
+//}
 
 // CourseValue to CourseText
 // CourseText to CourseValue
