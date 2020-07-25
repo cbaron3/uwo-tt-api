@@ -173,6 +173,7 @@ func main() {
 
 		// Course data endpoint
 		api.GET("/courses", wrapHandlerMoesif(c.ListCourses, moesifOptions))
+		api.GET("/sections", wrapHandlerMoesif(c.ListSections, moesifOptions))
 	}
 
 	port := getPort()

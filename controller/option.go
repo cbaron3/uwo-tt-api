@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"uwo-tt-api/model"
 	_ "uwo-tt-api/model" // Placeholder; will be required soon
@@ -14,53 +13,50 @@ import (
 
 	"github.com/gorilla/schema"
 
-	"strings"
 	"errors"
-	
+	"strings"
 )
 
 type OptQueryParams struct {
 	// Filtering
-	Inclusive bool `schema:"inclusive"`  
-	Value []string `schema:"value"`
-	Text []string `schema:"text"`
+	Inclusive bool     `schema:"inclusive"`
+	Value     []string `schema:"value"`
+	Text      []string `schema:"text"`
 
 	// Sorting
 	SortBy string `schema:"sortby"`
 	Dec    bool   `schema:"dec"`
 
-	// Pagination 
-    Offset int  `schema:"offset"`
-    Limit  int  `schema:"limit"`
-
+	// Pagination
+	Offset int `schema:"offset"`
+	Limit  int `schema:"limit"`
 }
 
 func ExtractOptFilter(r *http.Request) (bson.M, error) {
 
 	cmds := map[string]string{
-		"exact": "$eq",
-		"gt":   "$gt",
-		"gte": "$gte",
-		"lt": "$lt",
-		"lte": "$lte",
+		"exact":  "$eq",
+		"except": "$ne",
+		"gt":     "$gt",
+		"gte":    "$gte",
+		"lt":     "$lt",
+		"lte":    "$lte",
 	}
 
-
 	filter := new(OptQueryParams)
-	
+
 	result := bson.M{}
 	arrfilter := bson.A{}
 
-    if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
+	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
 		fmt.Println("Opt decoding failed")
 	} else {
-		
 
 		for _, value := range filter.Value {
 			f := strings.Split(value, ":")
 
 			if val, ok := cmds[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"data.value" : bson.M{val: f[1]}})
+				arrfilter = append(arrfilter, bson.M{"data.value": bson.M{val: f[1]}})
 			} else {
 				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
 			}
@@ -70,7 +66,7 @@ func ExtractOptFilter(r *http.Request) (bson.M, error) {
 			f := strings.Split(text, ":")
 
 			if val, ok := cmds[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"data.text" : bson.M{val: f[1]}})
+				arrfilter = append(arrfilter, bson.M{"data.text": bson.M{val: f[1]}})
 			} else {
 				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
 			}
@@ -83,20 +79,19 @@ func ExtractOptFilter(r *http.Request) (bson.M, error) {
 				result = bson.M{"$and": arrfilter}
 			}
 		}
-		
+
 	}
 
 	return result, nil
 }
 
-
 // No need for filtering with options
 func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
 
-	opts := options.Find() 
+	opts := options.Find()
 	filter := new(OptQueryParams)
-	
-    if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
+
+	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
 		return opts, errors.New("Option decoding failed")
 	} else {
 		fmt.Println(filter)
@@ -105,9 +100,9 @@ func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
 		if filter.SortBy != "" {
 			// By default, sort ascending unless descending is specfied
 			if filter.Dec == true {
-				opts.SetSort(bson.D{{"data."+filter.SortBy, -1}})
+				opts.SetSort(bson.D{{"data." + filter.SortBy, -1}})
 			} else {
-				opts.SetSort(bson.D{{"data."+filter.SortBy, 1}})
+				opts.SetSort(bson.D{{"data." + filter.SortBy, 1}})
 			}
 		}
 
@@ -298,5 +293,3 @@ func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
 func (c *Controller) ListCampuses(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("campuses", w, r)
 }
-
-// Course number and days are a given; simply provided usage description in documentation

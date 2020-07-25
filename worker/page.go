@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -133,6 +134,15 @@ func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, w
 	// Connect to collection
 	tempCollection := page.DB.Collection(collectionName + "_temp")
 
+	// Delete all existing documents if recovering from crash
+	res, err := tempCollection.DeleteMany(context.TODO(), bson.M{})
+	if err != nil {
+		fmt.Println("DeleteMany() ERROR:", err)
+		return
+	}
+
+	fmt.Printf("Cleared %d documents from temporary %s collection\n", res.DeletedCount, collectionName)
+
 	// Scraped options, empty map slice
 	opts := []interface{}{}
 
@@ -203,9 +213,16 @@ func extractCourseInfo(courseList *goquery.Selection, courseIndex int) model.Cou
 		number = number[:4]
 	}
 
+	num, err := strconv.Atoi(Trim(number))
+	if err != nil {
+		// handle error
+		fmt.Println(err)
+		num = 0
+	}
+
 	return model.CourseComponent{
 		Faculty:     Trim(faculty),
-		Number:      Trim(number),
+		Number:      num,
 		Suffix:      Trim(suffix),
 		Name:        Trim(name),
 		Description: Trim(desc)}
@@ -224,11 +241,23 @@ func extractSectionInfo(section *goquery.Selection) model.SectionComponent {
 		// k represents index of the table heading; column number
 		switch k {
 		case NumberCol:
-			s.Number = Trim(elem.Text())
+			i, err := strconv.Atoi(Trim(elem.Text()))
+			if err != nil {
+				// handle error
+				fmt.Println(err)
+			} else {
+				s.Number = i
+			}
 		case ComponentCol:
 			s.Component = Trim(elem.Text())
 		case ClassNbrCol:
-			s.ClassNumber = Trim(elem.Text())
+			i, err := strconv.Atoi(Trim(elem.Text()))
+			if err != nil {
+				// handle error
+				fmt.Println(err)
+			} else {
+				s.ClassNumber = i
+			}
 		case DaysCol:
 			// Find all valid table elements that represent days the class is scheduled for
 			elem.Find("td").Each(func(d int, day *goquery.Selection) {
@@ -270,6 +299,15 @@ func extractSectionInfo(section *goquery.Selection) model.SectionComponent {
 func (page *PageScraper) ScrapeCoursesToDB(c chan *goquery.Document) {
 
 	tempCollection := page.DB.Collection("courses_temp")
+
+	// Delete all existing documents if recovering from crash
+	res, err := tempCollection.DeleteMany(context.TODO(), bson.M{})
+	if err != nil {
+		fmt.Println("DeleteMany() ERROR:", err)
+		return
+	}
+
+	fmt.Printf("Cleared %d documents from temporary courses collection\n", res.DeletedCount)
 
 	for doc := range c {
 		courses := doc.Find(".span12")
@@ -335,7 +373,7 @@ func (page *PageScraper) ScrapeCoursesToDB(c chan *goquery.Document) {
 	fmt.Printf("Course aggregation time: %s\n", time.Since(startTime).String())
 
 	// Drop temporary collection
-	err := tempCollection.Drop(context.TODO())
+	err = tempCollection.Drop(context.TODO())
 	if err != nil {
 		fmt.Println(err)
 	}
