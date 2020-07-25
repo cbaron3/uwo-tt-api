@@ -11,6 +11,7 @@ require (
 	github.com/go-co-op/gocron v0.2.0
 	github.com/go-openapi/spec v0.19.8 // indirect
 	github.com/go-openapi/swag v0.19.9 // indirect
+	github.com/go-redis/redis/v7 v7.2.0
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/schema v1.1.0
 	github.com/mailru/easyjson v0.7.1 // indirect
@@ -20,6 +21,8 @@ require (
 	github.com/swaggo/gin-swagger v1.2.0
 	github.com/swaggo/http-swagger v0.0.0-20200308142732-58ac5e232fba
 	github.com/swaggo/swag v1.6.7
+	github.com/ulule/limiter v2.2.2+incompatible
+	github.com/ulule/limiter/v3 v3.5.0
 	github.com/urfave/cli v1.22.4 // indirect
 	github.com/urfave/cli/v2 v2.2.0 // indirect
 	go.mongodb.org/mongo-driver v1.3.4

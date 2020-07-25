@@ -17,6 +17,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	libredis "github.com/go-redis/redis/v7"
+
+	limiter "github.com/ulule/limiter/v3"
+	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
+	sredis "github.com/ulule/limiter/v3/drivers/store/redis"
+
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -150,6 +156,36 @@ func main() {
 
 	// Get moesif configuration
 	moesifOptions := getMoesifOptions()
+
+	// Define a limit rate to 4 requests per hour.
+	rate, err := limiter.NewRateFromFormatted("2-H")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	// Create a redis client.
+	option, err := libredis.ParseURL("redis://redis:6379/0")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	rclient := libredis.NewClient(option)
+
+	// Create a store with the redis client.
+	store, err := sredis.NewStoreWithOptions(rclient, limiter.StoreOptions{
+		Prefix:   "limiter_gin_example",
+		MaxRetry: 3,
+	})
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	// Create a new middleware with the limiter instance.
+	middleware := mgin.NewMiddleware(limiter.New(store, rate))
+
+	router.Use(middleware)
 
 	// Swagger documentation
 	router.NoRoute(func(c *gin.Context) {

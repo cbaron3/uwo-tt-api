@@ -15,3 +15,8 @@ services:
       - '27018:27017'
     logging:
       driver: "none"
+  redis:
+    image: 'redis:latest'
+    container_name: 'redis'
+    ports:
+      - '6380:6379'
