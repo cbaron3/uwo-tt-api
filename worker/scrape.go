@@ -1,11 +1,14 @@
 package worker
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
+	"uwo-tt-api/model"
 
-	"github.com/PuerkitoBio/goquery"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -54,12 +57,32 @@ func ScrapeTimeTable(db *mongo.Database) {
 	wg.Wait()
 	fmt.Println("Options scraping:", time.Since(startTime))
 
+	// Grab available subjects from DB
+	collection := page.DB.Collection("subjects")
+	cur, err := collection.Find(context.TODO(), bson.D{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//Define an array in which you can store the decoded documents
+	var subjects []model.Option
+	for cur.Next(context.TODO()) {
+		//Create a value into which the single document can be decoded
+		var elem model.Option
+		err := cur.Decode(&elem)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		subjects = append(subjects, elem)
+	}
+
 	// Capture start time for metrics (again)
 	startTime = time.Now()
 
 	// Create channel to be populated with POST results from webpage
-	c := make(chan *goquery.Document)
-	go page.ScrapeCoursesToDB(c)
+	c := make(chan PageResult)
+	go page.ScrapeCoursesToDB(c, len(subjects))
 
 	// Iterate over all subjects
 	for _, subject := range subjects {
@@ -78,7 +101,10 @@ func ScrapeTimeTable(db *mongo.Database) {
 		}
 
 		// Add result to channel so that it can be parsed by scrape goroutine
-		c <- doc
+		c <- PageResult{
+			Doc:  doc,
+			Name: subject.Data.Value,
+		}
 	}
 
 	// Close channel afterwards

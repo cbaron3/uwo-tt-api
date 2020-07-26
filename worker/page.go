@@ -51,13 +51,19 @@ const CampusCol = 10
 // DeliveryCol section delivery type column index
 const DeliveryCol = 11
 
-// Page defines the website source
+// PageScraper defines the context for the page to be scraped and the location of scrape resulst
 type PageScraper struct {
 	Header string
 	URL    string
 	Status string
 	DB     *mongo.Database
 	Form   *goquery.Selection
+}
+
+// PageResult encompasses data that is passed into channel to be parsed
+type PageResult struct {
+	Name string
+	Doc  *goquery.Document
 }
 
 // BuildSourceInfo creates source info based on page information
@@ -131,10 +137,10 @@ func (page *PageScraper) PostDocument(data map[string][]string) (document *goque
 func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	// Connect to collection
+	// Connect to temporary collection
 	tempCollection := page.DB.Collection(collectionName + "_temp")
 
-	// Delete all existing documents if recovering from crash
+	// Delete all existing documents if recovering from crash or shutdown
 	res, err := tempCollection.DeleteMany(context.TODO(), bson.M{})
 	if err != nil {
 		fmt.Println("DeleteMany() ERROR:", err)
@@ -167,7 +173,8 @@ func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, w
 		fmt.Println(err)
 	}
 
-	// Create aggregation pipeline where first, all data is matched, then all data is written to collectionName
+	// Create aggregation pipeline were first, all data is matched, then all data is written to collectionName
+	// $out replaces data in collection
 	pipeline := bson.A{
 		bson.M{"$match": bson.M{}},
 		bson.M{"$out": collectionName},
@@ -190,6 +197,7 @@ func (page *PageScraper) ScrapeOptToDB(collectionName string, selector string, w
 
 }
 
+// extract information course specific information from goquery selection
 func extractCourseInfo(courseList *goquery.Selection, courseIndex int) model.CourseComponent {
 	// Grab header based on course index
 	header := courseList.ChildrenFiltered("h4").Eq(courseIndex).Text()
@@ -228,6 +236,7 @@ func extractCourseInfo(courseList *goquery.Selection, courseIndex int) model.Cou
 		Description: Trim(desc)}
 }
 
+// extract section specific information from goquery selection
 func extractSectionInfo(section *goquery.Selection) model.SectionComponent {
 	var s model.SectionComponent
 
@@ -295,9 +304,10 @@ func extractSectionInfo(section *goquery.Selection) model.SectionComponent {
 	return s
 }
 
-// ScrapeCoursesToDB tbd
-func (page *PageScraper) ScrapeCoursesToDB(c chan *goquery.Document) {
+// ScrapeCoursesToDB scrapes course information from pages incoming into channel and store info in database
+func (page *PageScraper) ScrapeCoursesToDB(c chan PageResult, size int) {
 
+	// Connect to temporary collection
 	tempCollection := page.DB.Collection("courses_temp")
 
 	// Delete all existing documents if recovering from crash
@@ -309,10 +319,13 @@ func (page *PageScraper) ScrapeCoursesToDB(c chan *goquery.Document) {
 
 	fmt.Printf("Cleared %d documents from temporary courses collection\n", res.DeletedCount)
 
+	counter := 1
+	// Iterate over documents in the channel as long as the channel is open
 	for doc := range c {
-		courses := doc.Find(".span12")
+		courses := doc.Doc.Find(".span12")
 
-		fmt.Println("New Doc")
+		fmt.Printf("Scraping - #%d: %s - %.2f%%\n", counter, doc.Name, float32((float32(counter)/float32(size))*100.00))
+		counter++
 
 		// Filter course list into each individual course table
 		courses.ChildrenFiltered("table").Each(func(i int, course *goquery.Selection) {
