@@ -11,7 +11,7 @@ import (
 func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
 	// Leaves sections as is
 	w.Header().Set("Content-Type", "application/json")
-	hitEndpoint("courses")
+	HitEndpoint("courses")
 
 	collection := c.DB.Collection("courses")
 
@@ -88,7 +88,7 @@ func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
 func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 	// Leaves sections as is
 	w.Header().Set("Content-Type", "application/json")
-	hitEndpoint("courses")
+	HitEndpoint("courses")
 
 	collection := c.DB.Collection("courses")
 

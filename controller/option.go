@@ -12,7 +12,7 @@ import (
 func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	hitEndpoint(collectionName)
+	HitEndpoint(collectionName)
 
 	collection := c.DB.Collection(collectionName)
 

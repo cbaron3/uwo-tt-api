@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Controller example
+// Controller struct which acts as base for all endpoint methods
 type Controller struct {
 	DB *mongo.Database
 }
@@ -23,11 +23,13 @@ func NewController() *Controller {
 	return &Controller{}
 }
 
-func hitEndpoint(name string) {
+// HitEndpoint simple helper to log when an endpoint was hit
+func HitEndpoint(name string) {
 	fmt.Printf("*** ENDPOINT RESOURCE HIT --> %s\n", name)
 }
 
-var FilterToDB = map[string]string{
+// FilterToDBOp lookup table for query parameter filter commands to mongo command
+var FilterToDBOp = map[string]string{
 	"exact":  "$eq",
 	"except": "$ne",
 	"gt":     "$gt",
@@ -36,6 +38,7 @@ var FilterToDB = map[string]string{
 	"lte":    "$lte",
 }
 
+// CourseQueryParams for decoding (gorilla) query params into a struct for handling
 type CourseQueryParams struct {
 	// Filtering
 	Inclusive          bool     `schema:"inclusive"`
@@ -66,258 +69,317 @@ type CourseQueryParams struct {
 	Limit  int `schema:"limit"`
 }
 
+// ExtractCourseFilter extracts course filters from request
 func ExtractCourseFilter(r *http.Request) (bson.M, error) {
 
-	filter := new(CourseQueryParams)
+	if r == nil {
+		return bson.M{}, errors.New("Request object is nil")
+	}
 
-	result := bson.M{}
-	arrfilter := bson.A{}
+	// Create struct to decode params into
+	params := new(CourseQueryParams)
 
-	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-		fmt.Println("Opt decoding failed")
-	} else {
+	if err := schema.NewDecoder().Decode(params, r.Form); err != nil {
+		fmt.Println("ExtractCourseFilter failed to decode request form into struct")
+		return bson.M{}, errors.New("Course query filters failed to decode")
+	}
 
-		fmt.Println(filter)
+	// Capture array of filters
+	filters := bson.A{}
 
-		for _, value := range filter.SectionNumber {
-			f := strings.Split(value, ":")
+	// TODO: Let us ignore this monstrosity of code
+	for _, value := range params.SectionNumber {
+		f := strings.Split(value, ":")
 
-			num, err := strconv.Atoi(f[1])
-			if err != nil {
-				// handle error
-				fmt.Println(err)
-				num = 0
-			}
+		op := f[0]
+		opValue := f[1]
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.number": bson.M{val: num}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section number command %d", f[0]))
-			}
+		num, err := strconv.Atoi(opValue)
+		if err != nil {
+			return bson.M{}, errors.New("Section number value failed to parse to integer")
 		}
 
-		for _, value := range filter.SectionComponent {
-			f := strings.Split(value, ":")
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.number": bson.M{val: num}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section number command %d", op)
+		}
+	}
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.component": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section component command %s", f[0]))
-			}
+	for _, value := range params.SectionComponent {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.component": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section component command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionClassNumber {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		num, err := strconv.Atoi(opValue)
+		if err != nil {
+			// handle error
+			fmt.Println(err)
+			num = 0
 		}
 
-		for _, value := range filter.SectionClassNumber {
-			f := strings.Split(value, ":")
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.classNumber": bson.M{val: num}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section class number  %d", op)
+		}
+	}
 
-			num, err := strconv.Atoi(f[1])
-			if err != nil {
-				// handle error
-				fmt.Println(err)
-				num = 0
-			}
+	for _, value := range params.SectionLocation {
+		f := strings.Split(value, ":")
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.classNumber": bson.M{val: num}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section class number  %d", f[0]))
-			}
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.location": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section location command %s", op)
+		}
+	}
+
+	for _, value := range params.SecionInstructor {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.instructor": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section instructor command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionReqs {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.requisites": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section requisites command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionStatus {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.status": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section status command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionCampus {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.campus": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section campus command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionDelivery {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.delivery": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section delivery command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionDay {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.times.days": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section days command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionStartTime {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.times.startTime": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section start time command %s", op)
+		}
+	}
+
+	for _, value := range params.SectionEndTime {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"sectionData.times.endTime": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid section end time command %s", op)
+		}
+	}
+
+	for _, value := range params.ClassFaculty {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"courseData.faculty": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid course faculty command %s", op)
+		}
+	}
+
+	for _, value := range params.ClassNumber {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		num, err := strconv.Atoi(opValue)
+		if err != nil {
+			// handle error
+			fmt.Println(err)
+			num = 0
 		}
 
-		for _, value := range filter.SectionLocation {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.location": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section location command %s", f[0]))
-			}
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"courseData.number": bson.M{val: num}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid course number command %s", op)
 		}
+	}
 
-		for _, value := range filter.SecionInstructor {
-			f := strings.Split(value, ":")
+	for _, value := range params.ClassSuffix {
+		f := strings.Split(value, ":")
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.instructor": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section instructor command %s", f[0]))
-			}
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"courseData.suffix": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid course suffix command %s", op)
 		}
+	}
 
-		for _, value := range filter.SectionReqs {
-			f := strings.Split(value, ":")
+	for _, value := range params.ClassName {
+		f := strings.Split(value, ":")
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.requisites": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section requisites command %s", f[0]))
-			}
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"courseData.name": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid course name command %s", op)
 		}
+	}
 
-		for _, value := range filter.SectionStatus {
-			f := strings.Split(value, ":")
+	for _, value := range params.ClassDescription {
+		f := strings.Split(value, ":")
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.status": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section status command %s", f[0]))
-			}
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"courseData.description": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid course description command %s", op)
 		}
+	}
 
-		for _, value := range filter.SectionCampus {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.campus": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section campus command %s", f[0]))
-			}
+	if len(filters) > 0 {
+		if params.Inclusive == true {
+			return bson.M{"$or": filters}, nil
+		} else {
+			return bson.M{"$and": filters}, nil
 		}
+	}
 
-		for _, value := range filter.SectionDelivery {
-			f := strings.Split(value, ":")
+	return bson.M{}, nil
+}
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.delivery": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section delivery command %s", f[0]))
-			}
+// ExtractCourseParams extract extra params from request besides filters into a set of find options
+func ExtractCourseParams(r *http.Request) (*options.FindOptions, error) {
+
+	if r == nil {
+		return options.Find(), errors.New("Request object is nil")
+	}
+
+	// Create struct to decode params into
+	params := new(CourseQueryParams)
+
+	if err := schema.NewDecoder().Decode(params, r.Form); err != nil {
+		return options.Find(), errors.New("Course query options failed to decode")
+	}
+
+	// Capture find options
+	result := options.Find()
+
+	// Determine sort parameters if they exist
+	if params.SortBy != "" {
+		// By default, sort ascending unless descending is specfied
+		if params.Dec == true {
+			result.SetSort(bson.D{{"data." + params.SortBy, -1}})
+		} else {
+			result.SetSort(bson.D{{"data." + params.SortBy, 1}})
 		}
+	}
 
-		for _, value := range filter.SectionDay {
-			f := strings.Split(value, ":")
+	// Determine pagination parameters if they exist
+	if params.Limit != 0 {
+		result.SetLimit(int64(params.Limit))
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.times.days": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section days command %s", f[0]))
-			}
+		// Can only create a skip in records if the limit is known
+		if params.Offset != 0 {
+			result.SetSkip(int64(params.Limit * (params.Offset - 1)))
 		}
-
-		for _, value := range filter.SectionStartTime {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.times.startTime": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section start time command %s", f[0]))
-			}
-		}
-
-		for _, value := range filter.SectionEndTime {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"sectionData.times.endTime": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid section end time command %s", f[0]))
-			}
-		}
-
-		for _, value := range filter.ClassFaculty {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"courseData.faculty": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid course faculty command %s", f[0]))
-			}
-		}
-
-		for _, value := range filter.ClassNumber {
-			f := strings.Split(value, ":")
-
-			num, err := strconv.Atoi(f[1])
-			if err != nil {
-				// handle error
-				fmt.Println(err)
-				num = 0
-			}
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"courseData.number": bson.M{val: num}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid course number command %s", f[0]))
-			}
-		}
-
-		for _, value := range filter.ClassSuffix {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"courseData.suffix": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid course suffix command %s", f[0]))
-			}
-		}
-
-		for _, value := range filter.ClassName {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"courseData.name": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid course name command %s", f[0]))
-			}
-		}
-
-		for _, value := range filter.ClassDescription {
-			f := strings.Split(value, ":")
-
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"courseData.description": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid course description command %s", f[0]))
-			}
-		}
-
-		if len(arrfilter) > 0 {
-			if filter.Inclusive == true {
-				result = bson.M{"$or": arrfilter}
-			} else {
-				result = bson.M{"$and": arrfilter}
-			}
-		}
-
 	}
 
 	return result, nil
 }
 
-// No need for filtering with options
-func ExtractCourseParams(r *http.Request) (*options.FindOptions, error) {
-
-	opts := options.Find()
-	filter := new(CourseQueryParams)
-
-	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-		return opts, errors.New("Option decoding failed")
-	} else {
-		fmt.Println(filter)
-
-		// Determine sort parameters if they exist
-		if filter.SortBy != "" {
-			// By default, sort ascending unless descending is specfied
-			if filter.Dec == true {
-				opts.SetSort(bson.D{{"data." + filter.SortBy, -1}})
-			} else {
-				opts.SetSort(bson.D{{"data." + filter.SortBy, 1}})
-			}
-		}
-
-		// Determine pagination parameters if they exist
-		if filter.Limit != 0 {
-			opts.SetLimit(int64(filter.Limit))
-
-			// Can only create a skip in records if the limit is known
-			if filter.Offset != 0 {
-				opts.SetSkip(int64(filter.Limit * (filter.Offset - 1)))
-			}
-		}
-	}
-
-	return opts, nil
-}
-
+// OptionQueryParams for decoding (gorilla) query params into a struct for handling
 type OptionQueryParams struct {
 	// Filtering
 	Inclusive bool     `schema:"inclusive"`
@@ -333,81 +395,97 @@ type OptionQueryParams struct {
 	Limit  int `schema:"limit"`
 }
 
+// ExtractOptFilter extracts option filters from request
 func ExtractOptFilter(r *http.Request) (bson.M, error) {
 
-	filter := new(OptionQueryParams)
+	if r == nil {
+		return bson.M{}, errors.New("Request object is nil")
+	}
 
-	result := bson.M{}
-	arrfilter := bson.A{}
+	// Create struct to decode params into
+	params := new(OptionQueryParams)
 
-	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-		fmt.Println("Opt decoding failed")
-	} else {
+	if err := schema.NewDecoder().Decode(params, r.Form); err != nil {
+		fmt.Println("ExtractOptFilter failed to decode request form into struct")
+		return bson.M{}, errors.New("Option query filters failed to decode")
+	}
 
-		for _, value := range filter.Value {
-			f := strings.Split(value, ":")
+	// Capture array of filters
+	filters := bson.A{}
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"data.value": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
-			}
+	for _, value := range params.Value {
+		f := strings.Split(value, ":")
+
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"data.value": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid filter command %s", op)
 		}
+	}
 
-		for _, text := range filter.Text {
-			f := strings.Split(text, ":")
+	for _, value := range params.Text {
+		f := strings.Split(value, ":")
 
-			if val, ok := FilterToDB[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"data.text": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
-			}
+		op := f[0]
+		opValue := f[1]
+
+		if val, ok := FilterToDBOp[op]; ok {
+			filters = append(filters, bson.M{"data.text": bson.M{val: opValue}})
+		} else {
+			return bson.M{}, fmt.Errorf("Invalid filter command %s", op)
 		}
+	}
 
-		if len(arrfilter) > 0 {
-			if filter.Inclusive == true {
-				result = bson.M{"$or": arrfilter}
-			} else {
-				result = bson.M{"$and": arrfilter}
-			}
+	if len(filters) > 0 {
+		if params.Inclusive == true {
+			return bson.M{"$or": filters}, nil
+		} else {
+			return bson.M{"$and": filters}, nil
 		}
+	}
 
+	return bson.M{}, nil
+}
+
+// ExtractOptParams extract extra params from request besides filters into a set of find options
+func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
+
+	if r == nil {
+		return options.Find(), errors.New("Request object is nil")
+	}
+
+	// Create struct to decode params into
+	params := new(OptionQueryParams)
+
+	if err := schema.NewDecoder().Decode(params, r.Form); err != nil {
+		return options.Find(), errors.New("Course query options failed to decode")
+	}
+
+	// Capture find options
+	result := options.Find()
+
+	// Determine sort parameters if they exist
+	if params.SortBy != "" {
+		// By default, sort ascending unless descending is specfied
+		if params.Dec == true {
+			result.SetSort(bson.D{{"data." + params.SortBy, -1}})
+		} else {
+			result.SetSort(bson.D{{"data." + params.SortBy, 1}})
+		}
+	}
+
+	// Determine pagination parameters if they exist
+	if params.Limit != 0 {
+		result.SetLimit(int64(params.Limit))
+
+		// Can only create a skip in records if the limit is known
+		if params.Offset != 0 {
+			result.SetSkip(int64(params.Limit * (params.Offset - 1)))
+		}
 	}
 
 	return result, nil
-}
-
-// No need for filtering with options
-func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
-
-	opts := options.Find()
-	filter := new(OptionQueryParams)
-
-	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-		return opts, errors.New("Option decoding failed")
-	} else {
-		fmt.Println(filter)
-
-		// Determine sort parameters if they exist
-		if filter.SortBy != "" {
-			// By default, sort ascending unless descending is specfied
-			if filter.Dec == true {
-				opts.SetSort(bson.D{{"data." + filter.SortBy, -1}})
-			} else {
-				opts.SetSort(bson.D{{"data." + filter.SortBy, 1}})
-			}
-		}
-
-		// Determine pagination parameters if they exist
-		if filter.Limit != 0 {
-			opts.SetLimit(int64(filter.Limit))
-
-			// Can only create a skip in records if the limit is known
-			if filter.Offset != 0 {
-				opts.SetSkip(int64(filter.Limit * (filter.Offset - 1)))
-			}
-		}
-	}
-
-	return opts, nil
 }
