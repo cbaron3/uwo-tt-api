@@ -158,7 +158,7 @@ func main() {
 	moesifOptions := getMoesifOptions()
 
 	// Define a limit rate to 4 requests per hour.
-	rate, err := limiter.NewRateFromFormatted("2-H")
+	rate, err := limiter.NewRateFromFormatted("1000-H")
 	if err != nil {
 		log.Fatal(err)
 		return

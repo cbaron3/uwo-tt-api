@@ -372,7 +372,7 @@ func ExtractCourseParams(r *http.Request) (*options.FindOptions, error) {
 
 		// Can only create a skip in records if the limit is known
 		if params.Offset != 0 {
-			result.SetSkip(int64(params.Limit * (params.Offset - 1)))
+			result.SetSkip(int64(params.Offset - 1))
 		}
 	}
 
@@ -483,7 +483,7 @@ func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
 
 		// Can only create a skip in records if the limit is known
 		if params.Offset != 0 {
-			result.SetSkip(int64(params.Limit * (params.Offset - 1)))
+			result.SetSkip(int64(params.Offset - 1))
 		}
 	}
 
