@@ -1,22 +1,16 @@
 package worker
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
-	"uwo-tt-api/model"
 
 	"github.com/PuerkitoBio/goquery"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ScrapeTimeTable scraper
 func ScrapeTimeTable(db *mongo.Database) {
-	// Capture start time for metrics
-	startTime := time.Now()
 
 	// Create page to be scraped
 	page := PageScraper{
@@ -29,8 +23,6 @@ func ScrapeTimeTable(db *mongo.Database) {
 	if err != nil {
 		fmt.Println("Error fetching document")
 	}
-
-	fmt.Println(page.Header, ": ", page.Status)
 
 	// Find base search form
 	page.Form = doc.Find("#searchForm")
@@ -46,11 +38,13 @@ func ScrapeTimeTable(db *mongo.Database) {
 		"end_times":    "[name=end_time]",
 	}
 
-	fmt.Println("Options scraping:", time.Since(startTime))
+	// Capture start time for metrics
+	startTime := time.Now()
 
 	var wg sync.WaitGroup
 
 	// Order is not preserved when looping over a map but order is not required in this case
+	// Loop over all collections and scrape the data based on their selector and store into db. Executed asynchronously
 	for key := range collectionToSelector {
 		wg.Add(1)
 		go page.ScrapeOptToDB(key, collectionToSelector[key], &wg)
@@ -60,29 +54,10 @@ func ScrapeTimeTable(db *mongo.Database) {
 	wg.Wait()
 	fmt.Println("Options scraping:", time.Since(startTime))
 
+	// Capture start time for metrics (again)
 	startTime = time.Now()
 
-	// COURSES SECTION
-	// Grab available subjects from DB
-	collection := page.DB.Collection("subjects")
-	cur, err := collection.Find(context.TODO(), bson.D{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	//Define an array in which you can store the decoded documents
-	var subjects []model.Option
-	for cur.Next(context.TODO()) {
-		//Create a value into which the single document can be decoded
-		var elem model.Option
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		subjects = append(subjects, elem)
-	}
-
+	// Create channel to be populated with POST results from webpage
 	c := make(chan *goquery.Document)
 	go page.ScrapeCoursesToDB(c)
 
@@ -92,7 +67,7 @@ func ScrapeTimeTable(db *mongo.Database) {
 			continue
 		}
 
-		// SleepRandom(10, 20)
+		// Delay to prevent API from getting blocked
 		time.Sleep(time.Duration(10) * time.Second)
 
 		// Post to page with subject. Needs to be done synchronously to keep time requirements
@@ -102,11 +77,12 @@ func ScrapeTimeTable(db *mongo.Database) {
 			fmt.Println("Error fetching document")
 		}
 
+		// Add result to channel so that it can be parsed by scrape goroutine
 		c <- doc
 	}
 
+	// Close channel afterwards
 	close(c)
 
 	fmt.Println("Course scraping:", time.Since(startTime))
-
 }
