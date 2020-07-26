@@ -7,118 +7,7 @@ import (
 	"net/http"
 	"uwo-tt-api/model"
 	_ "uwo-tt-api/model" // Placeholder; will be required soon
-
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
-
-	"github.com/gorilla/schema"
-
-	"errors"
-	"strings"
 )
-
-type OptQueryParams struct {
-	// Filtering
-	Inclusive bool     `schema:"inclusive"`
-	Value     []string `schema:"value"`
-	Text      []string `schema:"text"`
-
-	// Sorting
-	SortBy string `schema:"sortby"`
-	Dec    bool   `schema:"dec"`
-
-	// Pagination
-	Offset int `schema:"offset"`
-	Limit  int `schema:"limit"`
-}
-
-func ExtractOptFilter(r *http.Request) (bson.M, error) {
-
-	cmds := map[string]string{
-		"exact":  "$eq",
-		"except": "$ne",
-		"gt":     "$gt",
-		"gte":    "$gte",
-		"lt":     "$lt",
-		"lte":    "$lte",
-	}
-
-	filter := new(OptQueryParams)
-
-	result := bson.M{}
-	arrfilter := bson.A{}
-
-	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-		fmt.Println("Opt decoding failed")
-	} else {
-
-		for _, value := range filter.Value {
-			f := strings.Split(value, ":")
-
-			if val, ok := cmds[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"data.value": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
-			}
-		}
-
-		for _, text := range filter.Text {
-			f := strings.Split(text, ":")
-
-			if val, ok := cmds[f[0]]; ok {
-				arrfilter = append(arrfilter, bson.M{"data.text": bson.M{val: f[1]}})
-			} else {
-				return bson.M{}, errors.New(fmt.Sprintf("Invalid filter command %s", f[0]))
-			}
-		}
-
-		if len(arrfilter) > 0 {
-			if filter.Inclusive == true {
-				result = bson.M{"$or": arrfilter}
-			} else {
-				result = bson.M{"$and": arrfilter}
-			}
-		}
-
-	}
-
-	return result, nil
-}
-
-// No need for filtering with options
-func ExtractOptParams(r *http.Request) (*options.FindOptions, error) {
-
-	opts := options.Find()
-	filter := new(OptQueryParams)
-
-	if err := schema.NewDecoder().Decode(filter, r.Form); err != nil {
-		return opts, errors.New("Option decoding failed")
-	} else {
-		fmt.Println(filter)
-
-		// Determine sort parameters if they exist
-		if filter.SortBy != "" {
-			// By default, sort ascending unless descending is specfied
-			if filter.Dec == true {
-				opts.SetSort(bson.D{{"data." + filter.SortBy, -1}})
-			} else {
-				opts.SetSort(bson.D{{"data." + filter.SortBy, 1}})
-			}
-		}
-
-		// Determine pagination parameters if they exist
-		if filter.Limit != 0 {
-			opts.SetLimit(int64(filter.Limit))
-
-			// Can only create a skip in records if the limit is known
-			if filter.Offset != 0 {
-				opts.SetSkip(int64(filter.Limit * (filter.Offset - 1)))
-			}
-		}
-	}
-
-	return opts, nil
-}
 
 func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -202,9 +91,6 @@ func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWrite
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /subjects [get]
 func (c *Controller) ListSubjects(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("subjects", w, r)
@@ -216,9 +102,6 @@ func (c *Controller) ListSubjects(w http.ResponseWriter, r *http.Request) {
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /suffixes [get]
 func (c *Controller) ListSuffixes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("suffixes", w, r)
@@ -230,9 +113,6 @@ func (c *Controller) ListSuffixes(w http.ResponseWriter, r *http.Request) {
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /delivery_types [get]
 func (c *Controller) ListDeliveryTypes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("delivery_types", w, r)
@@ -244,9 +124,6 @@ func (c *Controller) ListDeliveryTypes(w http.ResponseWriter, r *http.Request) {
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /components [get]
 func (c *Controller) ListComponents(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("components", w, r)
@@ -258,9 +135,6 @@ func (c *Controller) ListComponents(w http.ResponseWriter, r *http.Request) {
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /start_times [get]
 func (c *Controller) ListStartTimes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("start_times", w, r)
@@ -272,9 +146,6 @@ func (c *Controller) ListStartTimes(w http.ResponseWriter, r *http.Request) {
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /end_times [get]
 func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("end_times", w, r)
@@ -286,9 +157,6 @@ func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
 // @Tags options
 // @Produce json
 // @Success 200 {array} model.Option
-// @Failure 400 {object} httputil.HTTPError
-// @Failure 404 {object} httputil.HTTPError
-// @Failure 500 {object} httputil.HTTPError
 // @Router /campuses [get]
 func (c *Controller) ListCampuses(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("campuses", w, r)
