@@ -6,13 +6,13 @@ import (
 	"net/http"
 )
 
-// HTTPError example
+// HTTPError encapsulate http error fields
 type HTTPError struct {
 	Code    int    `json:"code" example:"400"`
 	Message string `json:"message" example:"status bad request"`
 }
 
-// NewError example
+// NewError create a new http error and print message for debugging
 func NewError(w http.ResponseWriter, status int, err error, logMsg string) http.ResponseWriter {
 	fmt.Println(logMsg)
 
@@ -24,5 +24,6 @@ func NewError(w http.ResponseWriter, status int, err error, logMsg string) http.
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(er)
 
+	// Return modified response
 	return w
 }

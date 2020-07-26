@@ -10,45 +10,36 @@ import (
 )
 
 func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWriter, r *http.Request) {
+	HitEndpoint("courses")
+
+	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
 
-	HitEndpoint(collectionName)
-
+	// Connect to collection
 	collection := c.DB.Collection(collectionName)
 
 	// Check if url can be parsed
 	if err := r.ParseForm(); err != nil {
-		fmt.Println("Form failed to parse")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to parse option query parameters")
 		return
 	}
 
 	// Extract find filters
 	findFilter, err := ExtractOptFilter(r)
 	if err != nil {
-		fmt.Println("Filters failed to extract")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to extract option filters")
 		return
 	}
 
 	findOptions, err := ExtractOptParams(r)
 	if err != nil {
-		fmt.Println("Options failed to extract")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to extract option options")
 		return
 	}
 
 	cur, err := collection.Find(context.TODO(), findFilter, findOptions)
 	if err != nil {
-		fmt.Println("DB query failed; malformed filter or option")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "DB query failed; malformed filter or option")
 		return
 	}
 
@@ -60,9 +51,7 @@ func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWrite
 		var elem model.Option
 		err := cur.Decode(&elem)
 		if err != nil {
-			fmt.Println("Failed to decode")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(err.Error())
+			w = NewError(w, http.StatusBadRequest, err, "Failed to decode db result")
 			return
 		}
 
@@ -70,15 +59,11 @@ func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWrite
 	}
 
 	if err := cur.Err(); err != nil {
-		fmt.Println("Failed to iterate through collection")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to iterate over db results")
 		return
 	}
 
 	//Close the cursor once finished
-	cur.Close(context.TODO())
-
 	fmt.Printf("Found %d documents in %s", len(options), collectionName)
 
 	w.WriteHeader(http.StatusOK)
