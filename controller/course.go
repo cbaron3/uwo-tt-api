@@ -3,55 +3,48 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"uwo-tt-api/model"
 )
 
+// ListSections grabs each individual model.Section that matches query filters and options
 func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
-	// Leaves sections as is
-	w.Header().Set("Content-Type", "application/json")
 	HitEndpoint("courses")
 
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json")
+
+	// Connect to courses collection
 	collection := c.DB.Collection("courses")
 
 	// Check if url can be parsed
 	if err := r.ParseForm(); err != nil {
-		fmt.Println("Form failed to parse")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to parse course query parameters")
 		return
 	}
 
 	// Extract find filters
 	findFilter, err := ExtractCourseFilter(r)
 	if err != nil {
-		fmt.Println("Filters failed to extract")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to extract course filters")
 		return
 	}
 
+	// Extract find options
 	findOptions, err := ExtractCourseParams(r)
 	if err != nil {
-		fmt.Println("Options failed to extract")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to extract course options")
 		return
 	}
 
+	// Perform DB query
 	cur, err := collection.Find(context.TODO(), findFilter, findOptions)
 	if err != nil {
-		fmt.Println("DB query failed; malformed filter or option")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "DB query failed; malformed filter or option")
 		return
 	}
 
-	//Define an array in which you can store the decoded documents
+	// Define an array to store the decoded documents
 	var sections []model.Section
 
 	for cur.Next(context.TODO()) {
@@ -59,9 +52,7 @@ func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
 		var elem model.Section
 		err := cur.Decode(&elem)
 		if err != nil {
-			fmt.Println("Failed to decode")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(err.Error())
+			w = NewError(w, http.StatusBadRequest, err, "Failed to decode db result")
 			return
 		}
 
@@ -69,66 +60,55 @@ func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := cur.Err(); err != nil {
-		fmt.Println("Failed to iterate through collection")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to iterate over db results")
 		return
 	}
 
 	//Close the cursor once finished
 	cur.Close(context.TODO())
 
-	fmt.Printf("Found %d documents in %s", len(sections), "courses")
-
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(sections)
-
 }
 
+// ListCourses grabs each individual model.Section that matches query filters and options and combines them into model.Course when CourseData is matching
 func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
-	// Leaves sections as is
-	w.Header().Set("Content-Type", "application/json")
 	HitEndpoint("courses")
 
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json")
+
+	// Connect to courses collection
 	collection := c.DB.Collection("courses")
 
 	// Check if url can be parsed
 	if err := r.ParseForm(); err != nil {
-		fmt.Println("Form failed to parse")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to parse course query parameters")
 		return
 	}
 
 	// Extract find filters
 	findFilter, err := ExtractCourseFilter(r)
 	if err != nil {
-		fmt.Println("Filters failed to extract")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to extract course filters")
 		return
 	}
 
+	// Extract find options
 	findOptions, err := ExtractCourseParams(r)
 	if err != nil {
-		fmt.Println("Options failed to extract")
-		// Handle error
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to extract course options")
 		return
 	}
 
+	// Perform DB query
 	cur, err := collection.Find(context.TODO(), findFilter, findOptions)
 	if err != nil {
-		fmt.Println("DB query failed; malformed filter or option")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "DB query failed; malformed filter or option")
 		return
 	}
 
-	//Define an array in which you can store the decoded documents
+	// Define an array to store the decoded documents
 	var sections []model.Section
 
 	for cur.Next(context.TODO()) {
@@ -136,9 +116,7 @@ func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 		var elem model.Section
 		err := cur.Decode(&elem)
 		if err != nil {
-			fmt.Println("Failed to decode")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(err.Error())
+			w = NewError(w, http.StatusBadRequest, err, "Failed to decode db result")
 			return
 		}
 
@@ -148,9 +126,10 @@ func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 	// Create list of courses
 	var courses []model.Course
 
+	// Combine sections into SectioData slice in course
 	for _, section := range sections {
 		if len(courses) == 0 {
-			// If the first course, simply wrap into course and append
+			// If the first course, simply copy section data into course and append
 			var course model.Course
 			course.Source = section.Source
 			course.Time = section.Time
@@ -159,11 +138,15 @@ func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 
 			courses = append(courses, course)
 		} else {
+
+			// Get last course in list
 			last := courses[len(courses)-1]
 
 			if last.CourseData == section.CourseData {
+				// If the last course in the list matches the section data, append section data
 				courses[len(courses)-1].SectionData = append(courses[len(courses)-1].SectionData, section.SectionData)
 			} else {
+				// If the last course in the list does not match the section data, create a new course in the list
 				var course model.Course
 				course.Source = section.Source
 				course.Time = section.Time
@@ -172,21 +155,16 @@ func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 
 				courses = append(courses, course)
 			}
-
 		}
 	}
 
 	if err := cur.Err(); err != nil {
-		fmt.Println("Failed to iterate through collection")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
+		w = NewError(w, http.StatusBadRequest, err, "Failed to iterate over db results")
 		return
 	}
 
 	//Close the cursor once finished
 	cur.Close(context.TODO())
-
-	fmt.Printf("Found %d documents in %s", len(courses), "courses")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(courses)
