@@ -324,7 +324,8 @@ func (page *PageScraper) ScrapeCoursesToDB(c chan PageResult, size int) {
 	for doc := range c {
 		courses := doc.Doc.Find(".span12")
 
-		fmt.Printf("Scraping - #%d: %s - %.2f%%\n", counter, doc.Name, float32((float32(counter)/float32(size))*100.00))
+		// Size-1 to account for the ANY element
+		fmt.Printf("Scraping - #%d: %s - %.2f%%\n", counter, doc.Name, float32((float32(counter)/float32(size-1))*100.00))
 		counter++
 
 		// Filter course list into each individual course table
