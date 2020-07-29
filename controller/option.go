@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"uwo-tt-api/model"
-	_ "uwo-tt-api/model" // Placeholder; will be required soon
 )
 
 func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWriter, r *http.Request) {
@@ -73,9 +72,13 @@ func (c *Controller) optionsEndpoint(collectionName string, w http.ResponseWrite
 // ListSubjects godoc
 // @Summary List all course subjects
 // @Description Get list of subjects where each subject is a string pair representing form text and form value
-// @Tags options
+// @Tags option
+// @ID options-list-subjects
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
+// @Failure 400 {object} HTTPError
 // @Router /subjects [get]
 func (c *Controller) ListSubjects(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("subjects", w, r)
@@ -84,9 +87,13 @@ func (c *Controller) ListSubjects(w http.ResponseWriter, r *http.Request) {
 // ListSuffixes godoc
 // @Summary List all course suffixes
 // @Description Get list of suffixes where each suffix is a string pair representing form text and form value. The suffix represents course weight and session.
-// @Tags options
+// @Tags option
+// @ID options-list-suffixes
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
+// @Failure 400 {object} HTTPError
 // @Router /suffixes [get]
 func (c *Controller) ListSuffixes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("suffixes", w, r)
@@ -95,10 +102,14 @@ func (c *Controller) ListSuffixes(w http.ResponseWriter, r *http.Request) {
 // ListDeliveryTypes godoc
 // @Summary List all course delivery types
 // @Description Get list of delivery types where each delivery type is a string pair representing form text and form value.
-// @Tags options
+// @Tags option
+// @ID options-list-delivery-types
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
-// @Router /delivery_types [get]
+// @Failure 400 {object} HTTPError
+// @Router /deliveryTypes [get]
 func (c *Controller) ListDeliveryTypes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("delivery_types", w, r)
 }
@@ -106,9 +117,13 @@ func (c *Controller) ListDeliveryTypes(w http.ResponseWriter, r *http.Request) {
 // ListComponents godoc
 // @Summary List all course components types
 // @Description Get list of course component types where each component type is a string pair representing form text and form value.
-// @Tags options
+// @Tags option
+// @ID options-list-components
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
+// @Failure 400 {object} HTTPError
 // @Router /components [get]
 func (c *Controller) ListComponents(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("components", w, r)
@@ -117,10 +132,14 @@ func (c *Controller) ListComponents(w http.ResponseWriter, r *http.Request) {
 // ListStartTimes godoc
 // @Summary List all course start times
 // @Description Get list of possible course start times where each time element is a string pair representing form text and form value.
-// @Tags options
+// @Tags option
+// @ID options-list-start-times
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
-// @Router /start_times [get]
+// @Failure 400 {object} HTTPError
+// @Router /startTimes [get]
 func (c *Controller) ListStartTimes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("start_times", w, r)
 }
@@ -128,10 +147,14 @@ func (c *Controller) ListStartTimes(w http.ResponseWriter, r *http.Request) {
 // ListEndTimes godoc
 // @Summary List all course end times
 // @Description Get list of possible course end times where each time element is a string pair representing form text and form value.
-// @Tags options
+// @Tags option
+// @ID options-list-end-times
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
-// @Router /end_times [get]
+// @Failure 400 {object} HTTPError
+// @Router /endTimes [get]
 func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("end_times", w, r)
 }
@@ -139,9 +162,13 @@ func (c *Controller) ListEndTimes(w http.ResponseWriter, r *http.Request) {
 // ListCampuses godoc
 // @Summary List all possible campuses for courses
 // @Description Get list of possible campuses where each campus is a string pair representing form text and form value.
-// @Tags options
+// @Tags option
+// @ID options-list-campuses
+// @Accept plain
 // @Produce json
+// @Param test query OptionQueryParams false "Option filter, sort, pagination"
 // @Success 200 {array} model.Option
+// @Failure 400 {object} HTTPError
 // @Router /campuses [get]
 func (c *Controller) ListCampuses(w http.ResponseWriter, r *http.Request) {
 	c.optionsEndpoint("campuses", w, r)

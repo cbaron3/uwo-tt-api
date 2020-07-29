@@ -7,7 +7,17 @@ import (
 	"uwo-tt-api/model"
 )
 
-// ListSections grabs each individual model.Section that matches query filters and options
+// ListSections godoc
+// @Summary List all sections
+// @Description Grabs each individual model.Section that matches query filters and options
+// @Tags course
+// @ID courses-list-sections
+// @Accept plain
+// @Produce json
+// @Param test query CourseQueryParams false "Option filter, sort, pagination"
+// @Success 200 {array} model.Section
+// @Failure 400 {object} HTTPError
+// @Router /sections [get]
 func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
 	HitEndpoint("courses")
 
@@ -71,7 +81,17 @@ func (c *Controller) ListSections(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(sections)
 }
 
-// ListCourses grabs each individual model.Section that matches query filters and options and combines them into model.Course when CourseData is matching
+// ListCourses godoc
+// @Summary List all courses
+// @Description Grabs each individual section that matches query filters and options and combines them into a course struct for all sections that have matching course info
+// @Tags course
+// @ID courses-list-courses
+// @Accept plain
+// @Produce json
+// @Param test query CourseQueryParams false "Course filter, sort, pagination"
+// @Success 200 {array} model.Section
+// @Failure 400 {object} HTTPError
+// @Router /courses [get]
 func (c *Controller) ListCourses(w http.ResponseWriter, r *http.Request) {
 	HitEndpoint("courses")
 

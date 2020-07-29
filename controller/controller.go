@@ -384,7 +384,7 @@ type OptionQueryParams struct {
 	// Filtering
 	Inclusive bool     `schema:"inclusive"`
 	Value     []string `schema:"value"`
-	Text      []string `schema:"text"`
+	Text      []string `schema:"text" `
 
 	// Sorting
 	SortBy string `schema:"sortby"`
