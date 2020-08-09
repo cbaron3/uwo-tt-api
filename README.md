@@ -83,13 +83,16 @@ This API supports the following:
 * Filtering
 * Rate Limiting
 
+The API has two main types of endpoint:
+
+1. Options - Data from form options. 
+2. Courses - Data from form results
+
 ### Built With
 
 * [golang 1.14](https://golang.org/)
 * [gin](https://github.com/gin-gonic/gin)
 * [MongoDB](https://www.mongodb.com/)
-
-
 
 <!-- GETTING STARTED -->
 ## Getting Started
