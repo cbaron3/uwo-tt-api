@@ -20,7 +20,7 @@ import (
 	limiter "github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	memory "github.com/ulule/limiter/v3/drivers/store/memory"
-
+	redis vs memorystore
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -71,6 +71,7 @@ func loadConfig() {
 	err := viper.ReadInConfig()
 
 	if err != nil {
+		log.Println("Error in config found!")
 		// If loading .env file fails, use variables sourced into the environment
 		log.Printf("Error reading config file %s. Using environment variables instead.", err)
 	}
@@ -88,7 +89,10 @@ func loadConfig() {
 // @host localhost:8080
 // @BasePath /api/v1/
 func main() {
+	fmt.Println("Here")
 	loadConfig()
+
+	fmt.Println("Config loaded")
 
 	// Mongo URL
 	mode, modeOK := viper.Get("GIN_MODE").(string)

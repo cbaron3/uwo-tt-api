@@ -44,6 +44,7 @@ COPY --from=builder /app/server /server
 
 # # Run the binary program produced by `go install`
 # COPY ./.env /
+RUN touch .env
 
 # Run the web service on container startup.
 CMD ["/server"]
