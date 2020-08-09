@@ -40,33 +40,33 @@ var FilterToDBOp = map[string]string{
 
 // CourseQueryParams for decoding (gorilla) query params into a struct for handling
 type CourseQueryParams struct {
-	// Filtering
-	Inclusive          bool     `schema:"inclusive"`
-	SectionNumber      []string `schema:"section-number"`
-	SectionComponent   []string `schema:"section-component"`
-	SectionClassNumber []string `schema:"section-class-number"`
-	SectionLocation    []string `schema:"section-location"`
-	SecionInstructor   []string `schema:"section-instructor"`
-	SectionReqs        []string `schema:"section-reqs"`
-	SectionStatus      []string `schema:"section-status"`
-	SectionCampus      []string `schema:"section-campus"`
-	SectionDelivery    []string `schema:"section-delivery"`
-	SectionDay         []string `schema:"section-day"`
-	SectionStartTime   []string `schema:"section-start-time"`
-	SectionEndTime     []string `schema:"section-end-time"`
-	ClassFaculty       []string `schema:"class-faculty"`
-	ClassNumber        []string `schema:"class-number"`
-	ClassSuffix        []string `schema:"class-suffix"`
-	ClassName          []string `schema:"class-name"`
-	ClassDescription   []string `schema:"class-desc"`
+	Inclusive bool `json:"inclusive"	schema:"inclusive"`
 
-	// Sorting
-	SortBy string `schema:"sortby"`
-	Dec    bool   `schema:"dec"`
+	SectionNumber      []string `json:"section-number" 			schema:"section-number"			example:"gte:001"`
+	SectionComponent   []string `json:"section-component" 		schema:"section-component" 		example:"exact:TUT"`
+	SectionClassNumber []string `json:"section-class-number" 	schema:"section-class-number"	example:"lt:1000"`
+	SectionLocation    []string `json:"section-location" 		schema:"section-location"		example:"exact:NS-145"`
+	SecionInstructor   []string `json:"section-instructor" 		schema:"section-instructor"		example:"exact:Rahman"`
+	SectionReqs        []string `json:"section-reqs" 			schema:"section-reqs"`
+	SectionStatus      []string `json:"section-status" 			schema:"section-status"			example:"exact:Full"`
+	SectionCampus      []string `json:"section-campus" 			schema:"section-campus"			example:"exact:Main"`
+	SectionDelivery    []string `json:"section-delivery" 		schema:"section-delivery"		example:"exact:Distance Studies/Online"`
+	SectionDay         []string `json:"section-day" 			schema:"section-day"			example:"exact:M"`
+	SectionStartTime   []string `json:"section-start-time" 		schema:"section-start-time" 	example:"except:8:30 AM"`
+	SectionEndTime     []string `json:"section-end-time" 		schema:"section-end-time"		example:"lte:7:00 PM"`
 
-	// Pagination
-	Offset int `schema:"offset"`
-	Limit  int `schema:"limit"`
+	ClassFaculty     []string `json:"class-faculty" 			schema:"class-faculty"			example:"exact:PSYCH"`
+	ClassNumber      []string `json:"class-number" 				schema:"class-number"			example:"gte:3000"`
+	ClassSuffix      []string `json:"class-suffix" 				schema:"class-suffix"			example:"exact:F"`
+	ClassName        []string `json:"class-name" 				schema:"class-name"				example:"exact:INTRODUCTION TO PSYCHOLOGY"`
+	ClassDescription []string `json:"class-desc" 				schema:"class-desc"`
+
+	SortBy string `json:"sortby" schema:"sortby" example:"sortby=class-number"`
+	Dec    bool   `json:"dec" schema:"dec" example:"true"`
+
+	Offset int `json:"offset" schema:"offset" example:"10"`
+
+	Limit int `json:"limit" schema:"limit" example:"5"`
 }
 
 // ExtractCourseFilter extracts course filters from request
@@ -381,18 +381,15 @@ func ExtractCourseParams(r *http.Request) (*options.FindOptions, error) {
 
 // OptionQueryParams for decoding (gorilla) query params into a struct for handling
 type OptionQueryParams struct {
-	// Filtering
-	Inclusive bool     `schema:"inclusive"`
-	Value     []string `schema:"value"`
-	Text      []string `schema:"text" `
+	Inclusive bool     `json:"inclusive" schema:"inclusive"`
+	Value     []string `json:"value" schema:"value" example:"exact:Main"`
+	Text      []string `json:"text" schema:"text" example:"gte:ACTURSCI"`
 
-	// Sorting
-	SortBy string `schema:"sortby"`
-	Dec    bool   `schema:"dec"`
+	SortBy string `json:"sortby" schema:"sortby" example:"sortby=value"`
+	Dec    bool   `json:"dec" schema:"dec" example:"true"`
 
-	// Pagination
-	Offset int `schema:"offset"`
-	Limit  int `schema:"limit"`
+	Offset int `json:"offset" schema:"offset" example:"10"`
+	Limit  int `json:"limit" schema:"limit" example:"5"`
 }
 
 // ExtractOptFilter extracts option filters from request

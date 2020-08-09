@@ -84,7 +84,7 @@ func loadConfig() {
 // @contact.name API Support
 // @contact.url http://www.github.com/cbaron3/uwo-tt-api
 
-// @host http://uwo-tt-api
+// @host http://uwottapi.ca
 // @BasePath /api/v1/
 func main() {
 	fmt.Println("Here")
