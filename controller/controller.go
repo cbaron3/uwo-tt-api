@@ -40,28 +40,28 @@ var FilterToDBOp = map[string]string{
 
 // CourseQueryParams for decoding (gorilla) query params into a struct for handling
 type CourseQueryParams struct {
-	Inclusive bool `json:"inclusive"	schema:"inclusive"`
+	Inclusive bool `json:"inclusive" schema:"inclusive"`
 
-	SectionNumber      []string `json:"section-number" 			schema:"section-number"			example:"gte:001"`
-	SectionComponent   []string `json:"section-component" 		schema:"section-component" 		example:"exact:TUT"`
-	SectionClassNumber []string `json:"section-class-number" 	schema:"section-class-number"	example:"lt:1000"`
-	SectionLocation    []string `json:"section-location" 		schema:"section-location"		example:"exact:NS-145"`
-	SecionInstructor   []string `json:"section-instructor" 		schema:"section-instructor"		example:"exact:Rahman"`
-	SectionReqs        []string `json:"section-reqs" 			schema:"section-reqs"`
-	SectionStatus      []string `json:"section-status" 			schema:"section-status"			example:"exact:Full"`
-	SectionCampus      []string `json:"section-campus" 			schema:"section-campus"			example:"exact:Main"`
-	SectionDelivery    []string `json:"section-delivery" 		schema:"section-delivery"		example:"exact:Distance Studies/Online"`
-	SectionDay         []string `json:"section-day" 			schema:"section-day"			example:"exact:M"`
-	SectionStartTime   []string `json:"section-start-time" 		schema:"section-start-time" 	example:"except:8:30 AM"`
-	SectionEndTime     []string `json:"section-end-time" 		schema:"section-end-time"		example:"lte:7:00 PM"`
+	SectionNumber      []string `json:"section-number" schema:"section-number" example:"gte:001"`
+	SectionComponent   []string `json:"section-component" schema:"section-component" example:"exact:TUT"`
+	SectionClassNumber []string `json:"section-class-number" schema:"section-class-number" example:"lt:1000"`
+	SectionLocation    []string `json:"section-location" schema:"section-location" example:"exact:NS-145"`
+	SecionInstructor   []string `json:"section-instructor" schema:"section-instructor" example:"exact:Rahman"`
+	SectionReqs        []string `json:"section-reqs" schema:"section-reqs"`
+	SectionStatus      []string `json:"section-status" schema:"section-status" example:"exact:Full"`
+	SectionCampus      []string `json:"section-campus" schema:"section-campus"	example:"exact:Main"`
+	SectionDelivery    []string `json:"section-delivery" schema:"section-delivery" example:"exact:Distance Studies/Online"`
+	SectionDay         []string `json:"section-time-day" schema:"section-time-day" example:"exact:M"`
+	SectionStartTime   []string `json:"section-time-start-time" schema:"section-time-start-time" example:"except:8:30 AM"`
+	SectionEndTime     []string `json:"section-time-end-time" schema:"section-time-end-time" example:"lte:7:00 PM"`
 
-	ClassFaculty     []string `json:"class-faculty" 			schema:"class-faculty"			example:"exact:PSYCH"`
-	ClassNumber      []string `json:"class-number" 				schema:"class-number"			example:"gte:3000"`
-	ClassSuffix      []string `json:"class-suffix" 				schema:"class-suffix"			example:"exact:F"`
-	ClassName        []string `json:"class-name" 				schema:"class-name"				example:"exact:INTRODUCTION TO PSYCHOLOGY"`
-	ClassDescription []string `json:"class-desc" 				schema:"class-desc"`
+	ClassFaculty     []string `json:"course-faculty" schema:"course-faculty" example:"exact:PSYCH"`
+	ClassNumber      []string `json:"course-number" schema:"course-number" example:"gte:3000"`
+	ClassSuffix      []string `json:"course-suffix" schema:"course-suffix" example:"exact:F"`
+	ClassName        []string `json:"course-name" schema:"course-name" example:"exact:INTRODUCTION TO PSYCHOLOGY"`
+	ClassDescription []string `json:"course-description" schema:"course-description"`
 
-	SortBy string `json:"sortby" schema:"sortby" example:"sortby=class-number"`
+	SortBy string `json:"sortby" schema:"sortby" example:"sortby=course-number"`
 	Dec    bool   `json:"dec" schema:"dec" example:"true"`
 
 	Offset int `json:"offset" schema:"offset" example:"10"`
@@ -81,6 +81,7 @@ func ExtractCourseFilter(r *http.Request) (bson.M, error) {
 
 	if err := schema.NewDecoder().Decode(params, r.Form); err != nil {
 		fmt.Println("ExtractCourseFilter failed to decode request form into struct")
+		fmt.Println(err)
 		return bson.M{}, errors.New("Course query filters failed to decode")
 	}
 
@@ -135,7 +136,7 @@ func ExtractCourseFilter(r *http.Request) (bson.M, error) {
 		if val, ok := FilterToDBOp[op]; ok {
 			filters = append(filters, bson.M{"sectionData.classNumber": bson.M{val: num}})
 		} else {
-			return bson.M{}, fmt.Errorf("Invalid section class number  %d", op)
+			return bson.M{}, fmt.Errorf("Invalid section course number  %d", op)
 		}
 	}
 
@@ -358,11 +359,48 @@ func ExtractCourseParams(r *http.Request) (*options.FindOptions, error) {
 
 	// Determine sort parameters if they exist
 	if params.SortBy != "" {
+
+		sort := strings.Split(params.SortBy, "-")
+
+		if len(sort) < 2 || len(sort) > 4 {
+			return options.Find(), errors.New("Invalid sort criteria")
+		}
+
+		sortParam := ""
+
+		// TODO: FIX TIME SORTING
+		// Instead of model vs controller, create each as their own resource. better code organization
+
+		if sort[0] == "course" {
+			sortParam += "courseData."
+		} else if sort[0] == "section" {
+			sortParam += "sectionData."
+		} else {
+			return options.Find(), errors.New("Invalid sort criteria")
+		}
+
+		index := 1
+
+		if sort[1] == "time" {
+			sortParam += "times."
+			index++
+		}
+
+		for i := index; i < len(sort); i++ {
+			if i == index {
+				sortParam += sort[i]
+			} else {
+				sortParam += strings.Title(strings.ToLower(sort[i]))
+			}
+		}
+
+		fmt.Println(sortParam)
+
 		// By default, sort ascending unless descending is specfied
 		if params.Dec == true {
-			result.SetSort(bson.D{{"data." + params.SortBy, -1}})
+			result.SetSort(bson.D{{sortParam, -1}})
 		} else {
-			result.SetSort(bson.D{{"data." + params.SortBy, 1}})
+			result.SetSort(bson.D{{sortParam, 1}})
 		}
 	}
 

@@ -22,3 +22,5 @@
 !.elasticbeanstalk/*.global.yml
 .ebextensions
 .ebextensions/*
+
+DEPLOYMENT.md
